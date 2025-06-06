@@ -8,7 +8,7 @@ API_URL = "https://api-daniela-campos-production.up.railway.app/"
 def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.theme = ft.Theme(color_scheme_seed=ft.Colors.RED)
-    page.title = "Resumen de Ventas"
+    page.title = "Resumen de Ventas - Daniela Campos"
     page.padding = 10
 
     todos_los_recibos = []
