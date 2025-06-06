@@ -73,7 +73,8 @@ def main(page: ft.Page):
             ft.DataColumn(ft.Text("Tarjeta")),
             ft.DataColumn(ft.Text("Crédito"))
         ],
-        rows=[]
+        rows=[],
+        visible=False
     )
 
     picker_desde = ft.DatePicker(
