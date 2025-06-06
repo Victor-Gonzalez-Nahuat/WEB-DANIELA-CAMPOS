@@ -195,10 +195,12 @@ def main(page: ft.Page):
             if response_totales.status_code == 200:
                 d = response_totales.json()
                 totales_card.content = ft.Column([
-                    ft.Text(f"Efectivo: ${float(d.get('total_neto', 0)):,.2f}", size=22, weight=ft.FontWeight.BOLD),
-                    ft.Text(f"Tarjeta: ${float(d.get('total_descuento', 0)):,.2f}", size=16, weight=ft.FontWeight.BOLD),
-                    ft.Text(f"Transferencia: ${len(data)}", size=14, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD),
-                    ft.Text(f"Otros: ${d.get('cantidad_status_1', 0)}", size=14, color=ft.Colors.RED_700, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Efectivo: ${float(d.get('efectivo', 0)):,.2f}", size=22, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Tarjeta: ${float(d.get('tarjeta', 0)):,.2f}", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Credito: ${float(d.get('credito', 0)):,.2f}", size=14, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Total sin IVA: ${float(d.get('total_sin_iva', 0)):,.2f}", size=14, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"IVA: ${float(d.get('iva', 0)):,.2f}", size=14, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Total con IVA: ${float(d.get('total_con_iva', 0)):,.2f}", size=14, weight=ft.FontWeight.BOLD),
                 ])
         except Exception as e:
             print("Error al obtener totales:", str(e))
