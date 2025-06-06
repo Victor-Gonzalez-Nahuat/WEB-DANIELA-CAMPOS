@@ -3,7 +3,7 @@ from datetime import datetime
 import requests
 import pytz
 
-API_URL = "https://api-telchac-production-45c8.up.railway.app/"
+API_URL = "https://api-daniela-campos-production.up.railway.app/"
 
 def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
