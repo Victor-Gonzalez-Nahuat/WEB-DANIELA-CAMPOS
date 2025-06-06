@@ -21,11 +21,11 @@ def main(page: ft.Page):
     hoy_str = hoy.isoformat()
 
     logo = ft.Image(
-        src="https://i.ibb.co/VWw6J6pQ/tulogoaquifooter.png",
+        src="https://i.ibb.co/93HyLTMh/sanfrancisco194.jpg",
         width=60, height=60, fit=ft.ImageFit.CONTAIN
     )
 
-    titulo_empresa = ft.Text("MI EMPRESA", size=26, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+    titulo_empresa = ft.Text("DANIELA CAMPOS", size=26, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
     titulo = ft.Text("Resumen de Ventas", size=28, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
 
     txt_fecha_desde = ft.TextField(label="Desde", read_only=True, width=150,
