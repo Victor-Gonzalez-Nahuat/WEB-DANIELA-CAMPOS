@@ -1,256 +1,265 @@
 import flet as ft
+from datetime import datetime
 import requests
+import pytz
 
-API_URL = "https://api-refaccionaria-production-d753.up.railway.app/producto/"
+API_URL = "https://api-telchac-production-45c8.up.railway.app/"
 
 def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.theme = ft.Theme(color_scheme_seed=ft.Colors.RED)
-    page.title = "Consulta de Producto"
+    page.title = "Resumen de Ventas"
     page.padding = 10
 
-    
+    todos_los_recibos = []
+    pagina_actual = 0
+    tamanio_pagina = 100
+
+
+    zona_horaria = pytz.timezone("America/Merida")
+    hoy = datetime.now(zona_horaria).date()
+    hoy_str = hoy.isoformat()
 
     logo = ft.Image(
-    src="https://i.ibb.co/8LxBQKh2/images.png", 
-    width=60,
-    height=60,
-    fit=ft.ImageFit.CONTAIN
+        src="https://i.ibb.co/VWw6J6pQ/tulogoaquifooter.png",
+        width=60, height=60, fit=ft.ImageFit.CONTAIN
     )
 
-    titulo_empresa = ft.Text(
-        "DANIELA CAMPOS",
-        size=26,
-        weight=ft.FontWeight.BOLD,
-        color=ft.colors.WHITE
+    titulo_empresa = ft.Text("MI EMPRESA", size=26, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+    titulo = ft.Text("Resumen de Ventas", size=28, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
+
+    txt_fecha_desde = ft.TextField(label="Desde", read_only=True, width=150,
+                                   value=hoy.strftime("%d-%m-%Y"), bgcolor=ft.Colors.WHITE)
+    txt_fecha_desde.data = hoy_str
+
+    txt_fecha_hasta = ft.TextField(label="Hasta", read_only=True, width=150,
+                                   value=hoy.strftime("%d-%m-%Y"), bgcolor=ft.Colors.WHITE)
+    txt_fecha_hasta.data = hoy_str
+
+    def actualizar_fecha(txt, nueva_fecha):
+        txt.data = nueva_fecha
+        txt.value = datetime.fromisoformat(nueva_fecha).strftime("%d-%m-%Y")
+        page.update()
+
+    date_picker_desde = ft.DatePicker(on_change=lambda e: actualizar_fecha(txt_fecha_desde, e.data))
+    date_picker_hasta = ft.DatePicker(on_change=lambda e: actualizar_fecha(txt_fecha_hasta, e.data))
+    page.overlay.extend([date_picker_desde, date_picker_hasta])
+
+    fecha_desde_btn = ft.ElevatedButton("Fecha desde", icon=ft.icons.CALENDAR_MONTH,
+                                        on_click=lambda e: page.open(date_picker_desde))
+    fecha_hasta_btn = ft.ElevatedButton("Fecha hasta", icon=ft.icons.CALENDAR_MONTH,
+                                        on_click=lambda e: page.open(date_picker_hasta))
+
+    contribuyente_input = ft.TextField(
+        label="Filtrar por contribuyente (opcional)",
+        width=400,
+        text_size=14,
+        border_color=ft.Colors.GREY,
+        color=ft.Colors.BLACK,
+        cursor_color=ft.Colors.BLACK,
+        visible=False
     )
-    titulo = ft.Text("Buscar Producto por Código", size=28, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE)
-    codigo_input = ft.TextField(label="Código del producto", width=1000, color=ft.colors.WHITE, border_color=ft.colors.WHITE, cursor_color=ft.colors.WHITE)
-    nombre_input = ft.TextField(label="Nombre del producto", width=400)
+
+    buscar_btn = ft.ElevatedButton("Buscar",
+        width=300, height=40, icon=ft.icons.SEARCH,
+        bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE, icon_color=ft.Colors.WHITE
+    )
+    desplegar_btn = ft.ElevatedButton("Resumen",
+        width=150, height=40, icon=ft.icons.INFO,
+        bgcolor=ft.Colors.AMBER, color=ft.Colors.WHITE, icon_color=ft.Colors.WHITE
+    )
+    buscar_btn.on_click = lambda e: buscar_producto(contribuyente_input.value)
+    desplegar_btn.on_click = lambda e: mostrar_despliegue_totales()
+
+    desplegar_dialog = ft.AlertDialog(title=ft.Text("Despliegue de Totales"))
 
     encabezado = ft.Container(
         content=ft.Column([
-            ft.Row([
-                logo,
-                titulo_empresa
-            ]),
+            ft.Row([logo, titulo_empresa]),
             titulo,
-            codigo_input
+            ft.Row([fecha_desde_btn, fecha_hasta_btn]),
+            ft.Row([txt_fecha_desde, txt_fecha_hasta]),
+            ft.Row([buscar_btn, desplegar_btn], alignment=ft.MainAxisAlignment.START),
+            contribuyente_input
         ]),
         padding=20,
-        bgcolor="#e9423a",
-        border_radius=ft.BorderRadius(top_left=0, top_right=0, bottom_left= 20, bottom_right= 20),  # Esquinas inferiores redondeadas
+        bgcolor=ft.Colors.RED,
+        border_radius=ft.BorderRadius(0, 0, 20, 20)
     )
-    resultado_card = ft.Container(
-        ft.Row([
-            ft.Image(
-            src="https://i.ibb.co/8LxBQKh2/images.png", 
-            width=250,
-            height=250,
-            fit=ft.ImageFit.CONTAIN
-            )
-        ], alignment=ft.MainAxisAlignment.CENTER))
 
-    def formatear_fecha(fecha_str):
-        if not fecha_str or len(fecha_str) != 6:
-            return "Fecha no válida"
+    resultado_card = ft.Container(content=ft.Column([], scroll=ft.ScrollMode.AUTO, height=200), padding=10)
+    totales_card = ft.Container()
+    loader = ft.ProgressRing(visible=False, color=ft.Colors.ORANGE, stroke_width=4)
+
+    def formatear_fecha_yymmdd(f):
         try:
-            anio = int(fecha_str[:2])
-            mes = int(fecha_str[2:4])
-            dia = int(fecha_str[4:])
-            anio += 2000
-            return f"{dia:02d}/{mes:02d}/{anio}"
+            return datetime.datetime.strptime(f, "%y%m%d").strftime("%d-%m-%Y")
         except:
-            return "Fecha inválida"
-
-
-    def buscar_producto(codigo):
+            return f
         
-        if not codigo:
-            resultado_card.content = ft.Text("⚠️ Por favor, introduce un código válido.", size=16)
-            page.update()
-            return
+    def cambiar_pagina(delta):
+        nonlocal pagina_actual
+        pagina_actual += delta
+        mostrar_pagina()
+        
+    def mostrar_resultados(data):
+        nonlocal todos_los_recibos, pagina_actual
+        todos_los_recibos = data
+        pagina_actual = 0
+        mostrar_pagina()
 
-        try:
-            res = requests.get(API_URL + codigo)
-            if res.status_code == 200:
-                data = res.json()
-                resultado_card.content = ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Text(f"🛠 Nombre: {data['nombre']}", size=20, weight=ft.FontWeight.BOLD),
-                            ft.Text(f"🔢 Código: {data['codigo']}"),
-                            ft.Text(f"📚 Grupo: {data['grupo']}"),
-                            ft.Text(f"🔼 Máximo: {data['maximo']}"),
-                            ft.Text(f"🔽 Mínimo: {data['minimo']}"),
-                            ft.Text(f"💲 Precio: ${data['precio']:.2f}"),
-                            ft.Text(f"📦 Existencia: {data['existencia']}"),
-                            ft.Text(f"🧾 Último costo: ${data['ultimo_costo']:.2f}"),
-                            ft.Text(f"📅 Última venta: {formatear_fecha(data['ultima_venta'])}"),
-                            ft.Text(f"📅 Última compra: {formatear_fecha(data['ultima_compra'])}"),
-                            ft.Text(f"🏭 Proveedor: {data['proveedor']}"),
-                        ]),
-                        padding=20,
-                    ),
-                    elevation=4,
-                )
-            else:
-                resultado_card.content = ft.Text("❌ Producto no encontrado.", size=16)
-                confirmacion = ft.AlertDialog(title=ft.Text("Código no encontrado"), 
-                                              content=ft.Column([
-                                                  ft.Text("¿Desea buscar por nombre?"),
-                                                  ft.Row([
-                                                    ft.ElevatedButton("Si", width=150, height=40, on_click= lambda e: buscar_por_nombre(codigo, confirmacion)),
-                                                    ft.ElevatedButton("No", width=150, height=40, on_click= lambda e: page.close(confirmacion))
-                                                ], alignment=ft.MainAxisAlignment.CENTER)  
-                                              ], height=80),
-                                              )
-                page.open(confirmacion)
+    def mostrar_pagina():
+        nonlocal pagina_actual, tamanio_pagina, todos_los_recibos
 
-        except Exception as ex:
-            resultado_card.content = ft.Text(f"🚫 Error al conectar con la API: {str(ex)}", size=16)
+        inicio = pagina_actual * tamanio_pagina
+        fin = inicio + tamanio_pagina
+        fragmento = todos_los_recibos[inicio:fin]
 
-        page.update()
-    
+        recibos_widgets = []
 
-    def copiar_al_portapapeles(codigo):
-        page.set_clipboard(codigo)
-        snack_bar = ft.SnackBar(
-        content=ft.Text("✅ Código copiado al portapapeles."),
-        bgcolor=ft.colors.GREEN
+        for r in fragmento:
+            es_cancelado = r.get("status", r.get("id_status", "0")) == "1"
+            color_texto = ft.Colors.GREY if es_cancelado else ft.Colors.BLACK
+            estado = "❌ CANCELADO" if es_cancelado else ""
+
+            tarjeta = ft.Card(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Text(f"Recibo: {r['recibo']} {estado}", weight=ft.FontWeight.BOLD, size=18, color=color_texto),
+                        ft.Text(f"Contribuyente: {r['contribuyente']}", color=color_texto),
+                        ft.Text(f"Concepto: {r['concepto']}", color=color_texto),
+                        ft.Text(f"Fecha: {formatear_fecha_yymmdd(r['fecha'])}", color=color_texto),
+                        ft.Text(f"Neto: ${float(r['neto']):,.2f}", weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_800 if not es_cancelado else ft.Colors.GREY),
+                        ft.Text(f"Descuento: ${float(r['descuento']):,.2f}", color=color_texto)
+                    ]),
+                    padding=15,
+                    bgcolor=ft.colors.WHITE,
+                    border_radius=10,
+                    shadow=ft.BoxShadow(blur_radius=8, color=ft.colors.GREY_400, offset=ft.Offset(2, 2))
+                ),
+                elevation=2
+            )
+            recibos_widgets.append(tarjeta)
+
+        botones_navegacion = []
+
+        if pagina_actual > 0:
+            botones_navegacion.append(ft.ElevatedButton("⬅️ Anteriores 100", on_click=lambda e: cambiar_pagina(-1)))
+
+        if fin < len(todos_los_recibos):
+            botones_navegacion.append(ft.ElevatedButton("Siguientes 100 ➡️", on_click=lambda e: cambiar_pagina(1)))
+
+        resultado_card.content = ft.Column(
+            recibos_widgets + [ft.Row(botones_navegacion, alignment=ft.MainAxisAlignment.CENTER)],
+            spacing=10, scroll=ft.ScrollMode.ALWAYS, height=200
         )
-        page.open(snack_bar)
+        page.update()
+    def buscar_producto(nombre_raw):
+        buscar_btn.disabled = True
+        loader.visible = True
+        fecha_desde_btn.disabled = True
+        fecha_hasta_btn.disabled = True
+        desplegar_btn.visible = False
+        buscar_btn.width = 300
         page.update()
 
-    def buscar_por_nombre_inmediato(nombre):
-        if not nombre.strip():
-            resultado_card.content = ft.Text("⚠️ Por favor, introduce un nombre válido.", size=16)
-            return
+        desde_date = datetime.fromisoformat(txt_fecha_desde.data).date()
+        hasta_date = datetime.fromisoformat(txt_fecha_hasta.data).date()
+        
+        desde = desde_date.strftime("%y%m%d")  # Formato YYMMDD
+        hasta = hasta_date.strftime("%y%m%d")  # Formato YYMMDD
+        
+        params = {"desde": desde, "hasta": hasta}
+
+        nombre = nombre_raw.strip()
+        if nombre:
+            params["contribuyente"] = nombre
+
+        cancelados = 0
+        data = []
 
         try:
-            res = requests.get(API_URL + f"nombre/{nombre}")
-            if res.status_code == 200:
-                data = res.json()
-
-                if isinstance(data, dict):
-                    data = [data]
-
-                columnas = []
-                for producto in data:
-                    columnas.append(
-                        ft.Container(
-                            content=ft.Column([
-                                ft.Text(f"🛠 Nombre: {producto['nombre']}", size=18, weight=ft.FontWeight.BOLD),
-                                ft.Text(f"🔢 Código: {producto['codigo']}"),
-                                
-                                ft.ElevatedButton(
-                                    "Seleccionar producto",
-                                    icon=ft.icons.SELECT_ALL,
-                                    icon_color=ft.colors.WHITE,
-                                    width=400,
-                                    height=40,
-                                    bgcolor=ft.colors.GREEN,
-                                    color=ft.colors.WHITE,
-                                    on_click=lambda e, c=producto['codigo']: buscar_producto(c)
-                                )
-                            ]),
-                            padding=10,
-                            margin=5,
-                            bgcolor=ft.colors.GREY_200,
-                            border_radius=10
-                        )
-                    )
-
-                resultado_card.content = ft.Column(columnas, scroll=ft.ScrollMode.AUTO)
+            url = f"{API_URL}recibos/filtrar" if "contribuyente" in params else f"{API_URL}recibos"
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                cancelados = sum(1 for r in data if r.get("status", r.get("id_status", "0")) == "1")
+                mostrar_resultados(data)
             else:
-                resultado_card.content = ft.Text("❌ Producto no encontrado por nombre.", size=16)
-        except Exception as ex:
-            resultado_card.content = ft.Text(f"🚫 Error al conectar con la API: {str(ex)}", size=16)
-
-        page.update()
-
-    def buscar_por_nombre(nombre, dialog):
-        if not nombre.strip():
-            resultado_card.content = ft.Text("⚠️ Por favor, introduce un nombre válido.", size=16)
-            cerrar_dialogo(dialog)
-            page.update()
-            return
+                print("Error:", response.status_code, response.json().get("detail"))
+        except Exception as e:
+            print("Error al buscar recibos:", str(e))
 
         try:
-            res = requests.get(API_URL + f"nombre/{nombre}")
-            if res.status_code == 200:
-                data = res.json()
+            response_totales = requests.get(f"{API_URL}recibos/totales", params=params)
+            if response_totales.status_code == 200:
+                d = response_totales.json()
+                totales_card.content = ft.Column([
+                    ft.Text(f"Efectivo: ${float(d.get('total_neto', 0)):,.2f}", size=22, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Tarjeta: ${float(d.get('total_descuento', 0)):,.2f}", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Transferencia: ${len(data)}", size=14, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Otros: ${d.get('cantidad_status_1', 0)}", size=14, color=ft.Colors.RED_700, weight=ft.FontWeight.BOLD),
+                ])
+        except Exception as e:
+            print("Error al obtener totales:", str(e))
 
-                if isinstance(data, dict):
-                    data = [data]
+        loader.visible = False
+        buscar_btn.disabled = False
+        fecha_hasta_btn.disabled = False
+        fecha_desde_btn.disabled = False
+        buscar_btn.width = 150
+        desplegar_btn.visible = True
+        page.update()
 
-                columnas = []
-                for producto in data:
-                    columnas.append(
-                        ft.Container(
-                            content=ft.Column([
-                                ft.Text(f"🛠 Nombre: {producto['nombre']}", size=18, weight=ft.FontWeight.BOLD),
-                                ft.Text(f"🔢 Código: {producto['codigo']}"),
-                                ft.ElevatedButton(
-                                    "Seleccionar producto",
-                                    icon=ft.icons.SELECT_ALL,
-                                    icon_color=ft.colors.WHITE,
-                                    width=400,
-                                    height=40,
-                                    bgcolor=ft.colors.GREEN,
-                                    color=ft.colors.WHITE,
-                                    on_click=lambda e, c=producto['codigo']: buscar_producto(c)
-                                )
-                            ]),
-                            padding=10,
-                            margin=5,
-                            bgcolor=ft.colors.GREY_200,
-                            border_radius=10
-                        )
-                    )
+    def mostrar_despliegue_totales():
+        desde_date = datetime.fromisoformat(txt_fecha_desde.data).date()
+        hasta_date = datetime.fromisoformat(txt_fecha_hasta.data).date()
 
-                resultado_card.content = ft.Column(columnas, scroll=ft.ScrollMode.AUTO)
+        desde = desde_date.strftime("%y%m%d")  # Formato YYMMDD
+        hasta = hasta_date.strftime("%y%m%d")  # Formato YYMMDD
+
+        params = {"desde": desde, "hasta": hasta}
+        try:
+            response = requests.get(f"{API_URL}recibos/totales/despliegue", params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if not data:
+                    desplegar_dialog.content = ft.Text("No se encontraron totales en este rango de fechas.")
+                    page.open(desplegar_dialog)
+                    return
+
+                items = []
+                for cuenta_data in data:
+                    cuenta = cuenta_data.get("cuenta", "Sin cuenta")
+                    total_neto = cuenta_data.get("total_neto", 0.0)
+                    total_descuento = cuenta_data.get("total_descuento", 0.0)
+
+                    items.append(ft.Text(f"Cuenta: {cuenta}", size=18, weight=ft.FontWeight.BOLD))
+                    items.append(ft.Text(f"  Total Neto: ${total_neto:,.2f}", size=16))
+                    items.append(ft.Text(f"  Total Descuento: ${total_descuento:,.2f}", size=16))
+                    items.append(ft.Divider())  # Línea divisoria entre cuentas
+
+                desplegar_dialog.content = ft.Column(items, height=400, scroll=ft.ScrollMode.ALWAYS)
+                page.open(desplegar_dialog)  # ← Abrir aquí, después de llenar el contenido
+
             else:
-                resultado_card.content = ft.Text("❌ Producto no encontrado por nombre.", size=16)
-        except Exception as ex:
-            resultado_card.content = ft.Text(f"🚫 Error al conectar con la API: {str(ex)}", size=16)
-
-        page.close(dialog)
-        nombre_input.value = ""
-        cerrar_dialogo(dialog)
-        page.update()
+                desplegar_dialog.content = ft.Text(f"Error al obtener datos: {response.status_code}")
+                page.open(desplegar_dialog)
+        except Exception as e:
+            print("Error al obtener totales:", str(e))
+            desplegar_dialog.content = ft.Text("Hubo un error al intentar obtener los datos.")
+            page.open(desplegar_dialog)
 
 
-    def abrir_dialogo(e):
-        page.open(dialogo_busqueda)
-        page.update()
-
-    def cerrar_dialogo(dialog):
-        page.close(dialog)
-        page.update()
-
-    botones = ft.Row([
-        ft.ElevatedButton("Buscar", on_click=lambda e: buscar_producto(codigo_input.value.strip()), width=180, height=40, icon=ft.icons.SEARCH),
-        ft.ElevatedButton("Buscar por nombre", on_click=lambda e: buscar_por_nombre_inmediato(codigo_input.value), width=180, height=40, icon=ft.icons.SEARCH)
-    ], alignment=ft.MainAxisAlignment.CENTER)
-    dialogo_busqueda = ft.AlertDialog(
-        modal=True,
-        title=ft.Text("Buscar por nombre"),
-        content=ft.Column([
-            nombre_input,
-            ft.ElevatedButton("Buscar", width=500, height=40, on_click=lambda e: buscar_por_nombre(nombre_input.value, dialogo_busqueda), icon=ft.icons.SEARCH)
-        ], tight=True),
-        actions=[ft.TextButton("Cerrar", on_click=lambda e: cerrar_dialogo(dialogo_busqueda))],
-        actions_alignment=ft.MainAxisAlignment.END,
-    )
     page.add(
         ft.Column([
             encabezado,
-            botones,
-            ft.Column([
-                resultado_card
-            ], scroll=ft.ScrollMode.AUTO, height=400)
+            loader,
+            totales_card,
+            resultado_card,
         ], spacing=20)
     )
+
+    buscar_producto("")
 
 ft.app(target=main)
