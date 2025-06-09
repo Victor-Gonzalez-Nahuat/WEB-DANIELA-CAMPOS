@@ -121,7 +121,6 @@ def main(page: ft.Page):
             es_cancelado = r.get("status", r.get("id_status", "0")) == "1"
             color_texto = ft.Colors.GREY if es_cancelado else ft.Colors.BLACK
             estado = "❌ CANCELADO" if es_cancelado else ""
-
             tarjeta = ft.Card(
                 content=ft.Container(
                     content=ft.Column([
