@@ -74,7 +74,7 @@ def main(page: ft.Page):
             ft.DataColumn(ft.Text("Crédito"))
         ],
         rows=[],
-        visible=False
+        visible=True
     )
 
     picker_desde = ft.DatePicker(

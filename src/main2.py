@@ -125,7 +125,7 @@ def main(page: ft.Page):
             tarjeta = ft.Card(
                 content=ft.Container(
                     content=ft.Column([
-                        ft.Text(f"Recibo: {r['recibo']} {estado}", weight=ft.FontWeight.BOLD, size=18, color=color_texto),
+                        ft.Text(f"Documento: {r['recibo']} {estado}", weight=ft.FontWeight.BOLD, size=18, color=color_texto),
                         ft.Text(f"Contribuyente: {r['contribuyente']}", color=color_texto),
                         ft.Text(f"Concepto: {r['concepto']}", color=color_texto),
                         ft.Text(f"Fecha: {formatear_fecha_yymmdd(r['fecha'])}", color=color_texto),
